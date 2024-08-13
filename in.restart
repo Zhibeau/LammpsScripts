@@ -1,0 +1,53 @@
+#---------------------------------initialisation and atom definition----------------
+units 					metal
+read_restart		    ${Siabox}
+change_box				all x scale ${Strain} remap
+change_box				all y scale ${Strain} remap
+change_box				all z scale ${Strain} remap
+fix						1 all deform 1 x scale 1 y scale 1 z scale 1
+#-----------------------------Setting-----------------------------------------------
+pair_style				eam/alloy  
+pair_coeff	 			* *  FeNiCr_Bonny_2013_ptDef.eam.alloy Ni
+neighbor 				2.0 bin 
+neigh_modify 			delay 5 check yes one 100000 page 100000000
+fix						nvt all nvt temp ${Temp}  ${Temp} 1 
+#------------------------------定义间隙--------------------------------
+variable		ax equal ${A}
+variable		strain equal ${Strain}
+variable		d1 equal "v_ax/sqrt(2)"
+variable		dis equal 0.27
+variable		dx atom "x/v_strain/v_ax - floor(x/v_strain/v_ax)"
+variable		dx atom "y/v_strain/v_ax - floor(y/v_strain/v_ax)"
+variable		dx atom "z/v_strain/v_ax - floor(z/v_strain/v_ax)"
+variable		SIAs atom 	" sqrt((v_dx)^2+(v_dy)^2+(v_dz)^2) > v_dis  && &
+									   sqrt((v_dx-0.5)^2+(v_dy)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-0.5)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-0.5)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-0.5)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-1)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-0.5)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-1)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-1)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-1)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-1)^2+(v_dz-1)^2) > v_dis"									   
+#-------------------------------输出间隙--------------------------------
+group			SIAs dynamic all var SIAs every 100
+compute			clus SIAs cluster/atom ${d1}
+variable		numSIAs equal count(SIAs)
+#-----------------------------MSD-------------------------------
+compute                 msd all msd
+#--------------------Output----------------------------------------------				
+log 				    log.${Action}.restart.${Nseed}
+thermo                  100
+thermo_style            custom step time temp press pxx pyy pzz pxy pxz pyz v_numSIAs c_msd[1] c_msd[2] c_msd[3] c_msd[4] etotal pe vol lx
+timestep				0.002
+compute 				2 all stress/atom NULL
+#dump                    2 all custom 20000 stress.${Action}.temp${Temp}.strain${Strain}.${Nseed}.* x y z c_2[1] c_2[2] c_2[3] c_2[4] c_2[5] c_2[6]
+dump					dumpposition all xyz ${gap} all.*.xyz
+#dump                    dumpsia SIAs custom ${gap} sia.*.xyz x y z c_clus
+restart					250000 restart.*
+write_restart 			restart.*
+run                     ${Nstep}

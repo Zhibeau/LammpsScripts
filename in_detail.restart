@@ -1,0 +1,16 @@
+#---------------------------------initialisation and atom definition----------------
+units 					metal
+read_restart		    ${Siabox}
+#-----------------------------Setting-----------------------------------------------
+pair_style				eam/alloy  
+pair_coeff	 			* *  FeNiCr_Bonny_2013_ptDef.eam.alloy Ni
+neighbor 				2.0 bin 
+neigh_modify 			delay 5 check yes one 100000 page 100000000
+fix						nvt all nvt temp ${Temp}  ${Temp} 1 
+#--------------------Output----------------------------------------------				
+timestep				0.002
+thermo_style			custom step time temp pe ke etotal press vol 
+thermo					50
+compute 				2 all stress/atom NULL
+dump					all all custom 50 ${Action}.temp${Temp}.strain${Strain}.${Nseed}.* type x y z c_2[1] c_2[2] c_2[3] c_2[4] c_2[5] c_2[6]
+run						${Nstep}

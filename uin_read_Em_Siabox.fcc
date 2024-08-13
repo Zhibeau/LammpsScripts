@@ -1,0 +1,73 @@
+#xyz文件中只有原子的类型和坐标因此使用read_dump命令重启就一定要提前定义好模拟盒子，势函数，邻近原子列表
+#弊端：xyz文件中没有原子速度因此如果没有velocity命令那么原子的速度都为0！
+#----------------------initiation---------------------------------------
+units 					metal 
+boundary				p p p 
+#----------------------atom definition-------------------------------------
+lattice					fcc ${A}
+variable				ax equal ${A}
+variable                strain equal ${Strain}
+variable				d1 equal "v_ax/sqrt(2)"
+region 					whole block -10 10 -10 10 -10 10
+create_box 				1 whole
+change_box				all x scale ${Strain} remap
+fix						1 all deform 1 x scale 1 y scale 1 z scale 1
+pair_style 				eam/alloy
+pair_coeff	 			* * FeNiCr_Bonny_2013_ptDef.eam.alloy Ni
+neighbor 				2.0 bin 
+neigh_modify 			delay 5 check yes one 100000 page 100000000
+read_dump				${Siabox} 0 x y z box no add yes format xyz 
+
+#读取xyz文件
+#0为读入文件对应的步数，但是因为某些原因只能设为0.
+#------------------------------定义间隙--------------------------------
+variable		dis equal 0.27
+variable		dx atom "x/v_strain/v_ax - floor(x/v_strain/v_ax)"
+variable		dy atom "y/v_ax - floor(y/v_ax)"
+variable		dz atom "z/v_ax - floor(z/v_ax)"
+variable		SIAs atom 	" sqrt((v_dx)^2+(v_dy)^2+(v_dz)^2) > v_dis  && &
+									   sqrt((v_dx-0.5)^2+(v_dy)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-0.5)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-0.5)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-0.5)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-1)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-0.5)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-1)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-1)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-1)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-1)^2+(v_dz-1)^2) > v_dis"									   
+#-------------------------------输出间隙--------------------------------
+group			SIAs dynamic all var SIAs every 100
+compute			clus SIAs cluster/atom ${d1}
+variable		numSIAs equal count(SIAs)
+#-----------------------------MSD-------------------------------
+compute                 msd all msd
+
+##------------------------------Energy Minimization-------------------------------能量最小化
+thermo					1
+log						log.em.${Action}.${m}
+thermo_style			custom step etotal pe press v_numSIAs
+#dump					mini all xyz 1 minall.${n}.*.xyz
+min_style 				cg
+minimize 				1e-24 1e-24 ${Ministep} 1000			##经测试，不同应变下这里用的都是7步左右，大于7步以后，缺陷会复合，导致缺陷数目减少
+#undump					mini
+reset_timestep			0
+velocity				all create ${Temp} ${Nseed} rot yes mom yes dist gaussian
+velocity               	all zero linear
+velocity                all zero angular
+fix						nvt all nvt temp ${Temp} ${Temp} 1
+#----- relaxation --------------------------------------------------------------------------
+log 				    log.${Action}.${m}
+thermo                  100
+thermo_style            custom step time temp press pxx pyy pzz pxy pxz pyz v_numSIAs c_msd[1] c_msd[2] c_msd[3] c_msd[4] etotal pe vol lx
+timestep				0.002
+compute 				2 all stress/atom NULL
+dump                    2 all custom 20000 stress.${Action}.temp${Temp}.strain${Strain}.${Nseed}.* x y z c_2[1] c_2[2] c_2[3] c_2[4] c_2[5] c_2[6]
+dump					dumpposition all xyz ${gap} all.*.xyz
+dump                    dumpsia SIAs custom ${gap} sia.*.xyz x y z c_clus
+restart					250000 restart.*
+write_restart 			restart.*
+run                     ${Nstep}

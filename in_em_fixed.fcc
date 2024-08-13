@@ -1,0 +1,29 @@
+variable		ax equal ${A}
+##-----Initialisation------------------------------------------------------------------
+units 					metal 
+boundary				p p p 
+variable                ratio equal 0.9919628273
+lattice					fcc ${A}
+region 					whole block  -10 10 -10 10 -10 10
+create_box 				1 whole	
+change_box				all x scale 0.9919628273 remap
+change_box				all y scale 0.9919628273 remap
+change_box				all z scale 0.9919628273 remap
+fix						1 all deform 1 x scale 1 y scale 1 z scale 1
+pair_style              eam/alloy
+pair_coeff              * * FeNiCr_Bonny_2013_ptDef.eam.alloy Ni 
+neighbor                2.0 bin
+neigh_modify            delay 5 check yes one 100000 page 100000000
+read_dump				${Siabox} 0 x y z add yes box no format xyz
+#------------------------------原子不动----------------------
+group                   fixed id 1
+fix                     2 fixed setforce 0 0 0 
+##--Minimization-------------------------------
+log                     log.${Action}.T${Temp}
+thermo					1
+thermo_style			custom step time temp dt pe ke etotal press vol lx
+dump					mini all xyz 1 minall.*.xyz
+min_style 				cg
+minimize 				1e-24 1e-24 10000 1000
+#undump					mini
+reset_timestep			0

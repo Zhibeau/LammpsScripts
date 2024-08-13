@@ -1,0 +1,60 @@
+variable				size equal 20
+variable   			strfzy equal 1./${Strain}
+	
+
+	variable				dis equal ${A}*0.27    ##特征距离
+	variable				d1 equal ${A}/sqrt(2)	#空位clus判据
+	variable				d2 equal ${A}/sqrt(2)	#间隙clus判据
+
+
+	units 					metal 
+	boundary				p p p 
+	lattice					fcc ${A}
+	region 					whole block $(-v_size/2) $(v_size/2) $(-v_size/2) $(v_size/2) $(-v_size/2) $(v_size/2)
+	create_box 			    2 whole #这里要比原来用到的type总数大1
+	change_box				all x scale ${Strain} remap #单轴
+	fix						1 all deform 1 x scale 1 y scale 1 z scale 1   ##改变盒子大小
+	read_dump				${Siabox} 0 x y z box no add yes format xyz #这里timestep必须设为0，可能是lammps从xyz文件读不出时间步数
+	group					real type 1 ##真实原子
+	reset_timestep			0
+
+	pair_style 				eam/alloy
+    pair_coeff	 			* * FeNiCr_Bonny_2013_ptDef.eam.alloy Ni Ni
+	neighbor                2.0 bin
+###空位
+	unfix					1
+	change_box				all x scale ${strfzy} remap
+	fix						2 all deform 1 x scale 1 y scale 1 z scale 1
+	create_atoms            2 region whole		 ##创造ref原子
+
+	unfix					2
+	change_box				all x scale ${Strain} remap
+
+	fix						3 all deform 1 x scale 1 y scale 1 z scale 1     ##改成合适的
+	group					ref type 2    ##分组ref原子
+	
+	delete_atoms			overlap ${dis} ref real #从ref中删除与real原子太近的原子，则ref中剩余的原子代表空穴
+	compute					cluv ref cluster/atom ${d1}
+	dump 					all ref custom 1 ${v_Clubox} x y z c_cluv
+
+	run						0
+	delete_atoms			group ref
+	undump					all
+	
+###间隙
+	unfix					3
+	change_box				all x scale ${strfzy} remap
+	fix						4 all deform 1 x scale 1 y scale 1 z scale 1
+	create_atoms            2 region whole		 #参考类型
+
+	unfix					4
+	change_box				all x scale ${Strain} remap
+
+	fix						5 all deform 1 x scale 1 y scale 1 z scale 1     ##改成合适的
+	group					ref type 2    ##创造ref原子
+	delete_atoms			overlap ${dis} real ref #从real中删除与ref原子太近的原子，则real中剩余的原子代表间隙
+	compute				    clus real cluster/atom ${d2} #间隙的团簇截断距离为第三邻近距离
+	dump 					all real custom 1 ${s_Clubox} x y z c_clus
+
+	
+	run						0

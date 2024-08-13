@@ -1,0 +1,45 @@
+variable		ax equal ${A}
+##-----Initialisation------------------------------------------------------------------
+units 					metal 
+boundary				p p p 
+
+lattice					fcc ${A}
+region 					whole block  -10 10 -10 10 -10 10
+create_box 				1 whole								
+
+pair_style              eam/alloy
+pair_coeff              * * FeNiCr_Bonny_2013_ptDef.eam.alloy Ni 
+neighbor                2.0 bin
+neigh_modify            delay 5 check yes one 100000 page 100000000
+read_dump				${Siabox} 0 x y z add yes box no format xyz
+#------------------------------定义间隙--------------------------------
+variable		dis equal 0.27
+variable		dx atom "x/v_ax - floor(x/v_ax)"
+variable		dy atom "y/v_ax - floor(y/v_ax)"
+variable		dz atom "z/v_ax - floor(z/v_ax)"
+variable		SIAs atom 	" sqrt((v_dx)^2+(v_dy)^2+(v_dz)^2) > v_dis  && &
+									   sqrt((v_dx-0.5)^2+(v_dy)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-0.5)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-0.5)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-0.5)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-1)^2+(v_dz-0.5)^2) > v_dis && &
+									   sqrt((v_dx-0.5)^2+(v_dy-0.5)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-1)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx)^2+(v_dy-1)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-1)^2+(v_dz)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy)^2+(v_dz-1)^2) > v_dis && &
+									   sqrt((v_dx-1)^2+(v_dy-1)^2+(v_dz-1)^2) > v_dis"									   
+#-------------------------------输出间隙--------------------------------
+group			SIAs dynamic all var SIAs every 100
+variable		numSIAs equal count(SIAs)
+##--Minimization-------------------------------
+log                     log.em.T${Temp}.G${n}
+thermo					1
+thermo_style			custom step time temp dt pe ke etotal press vol v_numSIAs lx
+dump					mini all xyz 1 minall.${n}.*.xyz
+min_style 				cg
+minimize 				1e-24 1e-24 ${ministep} 1000
+#undump					mini
+reset_timestep			0

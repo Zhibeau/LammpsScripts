@@ -1,0 +1,28 @@
+##-----Initialisation------------------------------------------------------------------
+units 					metal 
+boundary				p p p
+variable				ax equal ${A}
+variable                strain equal ${Strain}
+variable				d1 equal "v_ax*v_strain"
+lattice					fcc ${d1}
+region 					whole block  -10 10 -10 10 -10 10
+create_box 				1 whole								
+create_atoms			1 region whole
+pair_style              eam/alloy
+pair_coeff              * * FeNiCr_Bonny_2013_ptDef.eam.alloy Ni 
+neighbor                2.0 bin
+neigh_modify            delay 5 check yes one 100000 page 100000000
+change_box				all x scale 1 remap
+#------ Simulation Condition -------------------------------------------------------------------
+fix						1 all deform 1 x scale 1 y scale 1 z scale 1
+velocity               all create ${Temp} ${Nseed} rot yes mom yes dist gaussian
+velocity               all zero linear
+velocity               all zero angular
+fix                    nvt all nvt temp ${Temp} ${Temp} 1
+#----- relaxation and md --------------------------------------------------------------------------
+compute                msd all msd
+thermo                 100
+thermo_style           custom step time temp press pxx pyy pzz lx ly lz etotal pe ke c_msd[4]
+timestep				0.002
+dump					dumpposition all xyz 500 relax.*.xyz
+run                    ${Nstep}
